@@ -15,7 +15,6 @@ builder.Services.AddStackExchangeRedisCache(options =>
 builder.Services.AddSingleton<ProductStore>();
 
 var app = builder.Build();
-app.Urls.Add("http://0.0.0.0:8080");
 
 app.UseSwagger();
 app.UseSwaggerUI();

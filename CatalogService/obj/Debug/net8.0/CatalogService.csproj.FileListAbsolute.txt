@@ -40,4 +40,4 @@
 /home/michaelachovancova/Documents/Projects/ShopMicroservices/CatalogService/obj/Debug/net8.0/CatalogService.pdb
 /home/michaelachovancova/Documents/Projects/ShopMicroservices/CatalogService/obj/Debug/net8.0/CatalogService.genruntimeconfig.cache
 /home/michaelachovancova/Documents/Projects/ShopMicroservices/CatalogService/obj/Debug/net8.0/ref/CatalogService.dll
-/home/michaelachovancova/Documents/Projects/ShopMicroservices/CatalogService/bin/Debug/net8.0/launchsettings.json
+/home/michaelachovancova/Documents/Projects/ShopMicroservices/CatalogService/obj/Debug/net8.0/CatalogService.sourcelink.json

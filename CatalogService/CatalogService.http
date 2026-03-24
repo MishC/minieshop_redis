@@ -1,20 +1,19 @@
-@baseUrl = http://localhost:5001
+@baseUrl = http://localhost:7000
 
-### Get all products
-GET {{baseUrl}}/api/products
+### Get all products through gateway
+GET {{baseUrl}}/products/
 Accept: application/json
 
-### Get product by id
-GET {{baseUrl}}/api/products/1
+### Get product by id through gateway
+GET {{baseUrl}}/products/1
 Accept: application/json
-
 ### Create product
-POST {{baseUrl}}/api/products
+POST {{baseUrl}}/products/
 Content-Type: application/json
 Accept: application/json
 
 {   
     "id": 4,
-    "name": "Example Product",
-    "price": 9.99,
+    "name": "SDD",
+    "price": 10
 }
