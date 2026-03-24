@@ -70,7 +70,7 @@ public static class ProductEndpoints
 
         group.MapPost("/", async (Product product, ProductStore store, IDistributedCache cache) =>
         {
-            store.Products.Add(product);
+            var created = store.Add(product);
 
             await cache.RemoveAsync("catalog:products:all");
             await cache.RemoveAsync($"catalog:products:{product.Id}");
