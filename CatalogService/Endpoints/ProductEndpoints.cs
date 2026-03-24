@@ -68,8 +68,11 @@ public static class ProductEndpoints
             return Results.Ok(product);
         });
 
-        group.MapPost("/", async (Product product, ProductStore store, IDistributedCache cache) =>
+        group.MapPost("/", async (ProductCreateDto dto, ProductStore store, IDistributedCache cache) =>
         {
+            
+            var product = new Product(0, dto.Name, dto.Price);
+
             var created = store.Add(product);
 
             await cache.RemoveAsync("catalog:products:all");
