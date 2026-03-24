@@ -1,0 +1,48 @@
+services:
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  catalogservice:
+    build:
+      context: ./CatalogService
+      dockerfile: Dockerfile
+    container_name: catalogservice
+    ports:
+      - "5001:8080"
+    depends_on:
+      - redis
+
+  cartservice:
+    build:
+      context: ./CartService
+      dockerfile: Dockerfile
+    container_name: cartservice
+    ports:
+      - "5002:8080"
+    depends_on:
+      - redis
+
+  orderservice:
+    build:
+      context: ./OrderService
+      dockerfile: Dockerfile
+    container_name: orderservice
+    ports:
+      - "5003:8080"
+    depends_on:
+      - redis
+
+  gateway:
+    build:
+      context: ./Gateway
+      dockerfile: Dockerfile
+    container_name: gateway
+    ports:
+      - "7000:8080"
+    depends_on:
+      - catalogservice
+      - cartservice
+      - orderservice
