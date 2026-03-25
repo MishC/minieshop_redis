@@ -12,6 +12,11 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.InstanceName = "cart-service:";
 });
 
+builder.Services.AddHttpClient("CatalogApi", client =>
+{
+    client.BaseAddress = new Uri("http://catalogservice:8080");
+});
+
 
 var app = builder.Build();
 
