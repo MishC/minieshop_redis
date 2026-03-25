@@ -21,7 +21,6 @@ if (app.Environment.IsDevelopment())
 }
 app.MapReverseProxy();
 
-app.UseHttpsRedirection();
 
 
 
