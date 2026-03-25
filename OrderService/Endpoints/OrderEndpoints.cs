@@ -95,7 +95,7 @@ public static class OrderEndpoints
         db.Orders.Add(order);
         await db.SaveChangesAsync();
 
-        // 🔥 clear cart (tvoj spôsob — OK)
+        // 🔥 clear cart 
         foreach (var item in cart.Items)
         {
             await cartClient.DeleteAsync($"/api/cart/{request.UserId}/items/{item.ProductId}");
