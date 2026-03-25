@@ -1,4 +1,34 @@
+@baseUrl = http://localhost:7000
+@userId = mishc
 
-###
-GET http://localhost:5002/cart/items
+### Health check
+GET {{baseUrl}}/cart/health
 
+### Get user cart
+GET {{baseUrl}}/cart/{{userId}}
+
+### Add first item
+POST {{baseUrl}}/cart/{{userId}}/items
+Content-Type: application/json
+Accept: application/json
+
+{
+    "productId": 1,
+    "quantity": 2
+}
+
+### Add second item
+POST {{baseUrl}}/cart/{{userId}}/items
+Content-Type: application/json
+Accept: application/json
+
+{
+    "productId": 2,
+    "quantity": 1
+}
+
+### Get user cart again
+GET {{baseUrl}}/cart/{{userId}}
+
+### Delete item
+DELETE {{baseUrl}}/cart/{{userId}}/items/1
