@@ -1,5 +1,8 @@
 @baseUrl = http://localhost:7000
 
+#Health check
+GET {{baseUrl}}/products/health
+
 ### Get all products through gateway
 GET {{baseUrl}}/products/
 Accept: application/json

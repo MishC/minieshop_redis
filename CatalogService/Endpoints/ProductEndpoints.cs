@@ -11,6 +11,8 @@ public static class ProductEndpoints
     {
         var group = app.MapGroup("/api/products");
 
+        group.MapGet("/health", async () => { Console.WriteLine("/api/products works"); });
+
         group.MapGet("/", async (ProductStore store, IDistributedCache cache) =>
         {
             const string cacheKey = "catalog:products:all";
