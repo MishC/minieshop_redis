@@ -1,113 +1,163 @@
 using System.Text.Json;
+using System.Net.Http.Json;
 using CartService.Models;
 using Microsoft.Extensions.Caching.Distributed;
 
-namespace CartService.Endpoints{
-
-public static class CartEndpoints
+namespace CartService.Endpoints
 {
-    public static void MapCartEndpoints(this WebApplication app)
+
+    public static class CartEndpoints
     {
-        var group = app.MapGroup("/api/cart");
-
-        group.MapGet("/{userId}", async (string userId, IDistributedCache cache) =>
+        public static void MapCartEndpoints(this WebApplication app)
         {
-            var cacheKey = $"cart:{userId}";
-            var cached = await cache.GetStringAsync(cacheKey);
+            var group = app.MapGroup("/api/cart");
 
-            Cart cart;
+            group.MapGet("/health", async () => { Console.WriteLine("/api/cart works"); });
 
-            if (string.IsNullOrEmpty(cached))
+            group.MapGet("/{userId}", async (string userId, IDistributedCache cache) =>
             {
-                cart = new Cart(userId, new List<CartItem>());
+                var cacheKey = $"cart:{userId}";
+                var cached = await cache.GetStringAsync(cacheKey);
 
-                var emptyJson = JsonSerializer.Serialize(cart);
-                await cache.SetStringAsync(
-                    cacheKey,
-                    emptyJson,
-                    new DistributedCacheEntryOptions
-                    {
-                        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
-                    });
-            }
-            else
-            {
-                cart = JsonSerializer.Deserialize<Cart>(cached)
-                    ?? new Cart(userId, new List<CartItem>());
-            }
+                Cart cart;
 
-            return Results.Ok(cart);
-        });
 
-        group.MapPost("/{userId}/items", async (string userId, CartItem item, IDistributedCache cache) =>
-        {
-            var cacheKey = $"cart:{userId}";
-            var cached = await cache.GetStringAsync(cacheKey);
-
-            var cart = string.IsNullOrEmpty(cached)
-                ? new Cart(userId, new List<CartItem>())
-                : JsonSerializer.Deserialize<Cart>(cached) ?? new Cart(userId, new List<CartItem>());
-
-            var existingItem = cart.Items.FirstOrDefault(x => x.ProductId == item.ProductId);
-
-            if (existingItem is not null)
-            {
-                cart.Items.Remove(existingItem);
-                cart.Items.Add(existingItem with
+                if (string.IsNullOrEmpty(cached))
                 {
-                    Quantity = existingItem.Quantity + item.Quantity
-                });
-            }
-            else
-            {
-                cart.Items.Add(item);
-            }
+                    cart = new Cart(userId, new List<CartItem>());
 
-            var json = JsonSerializer.Serialize(cart);
-
-            await cache.SetStringAsync(
-                cacheKey,
-                json,
-                new DistributedCacheEntryOptions
+                    var emptyJson = JsonSerializer.Serialize(cart);
+                    await cache.SetStringAsync(
+                        cacheKey,
+                        emptyJson,
+                        new DistributedCacheEntryOptions
+                        {
+                            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
+                        });
+                }
+                else
                 {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
-                });
+                    cart = JsonSerializer.Deserialize<Cart>(cached)
+                        ?? new Cart(userId, new List<CartItem>());
 
-            return Results.Ok(cart);
-        });
+                }
 
-        group.MapDelete("/{userId}/items/{productId:int}", async (string userId, int productId, IDistributedCache cache) =>
-        {
-            var cacheKey = $"cart:{userId}";
-            var cached = await cache.GetStringAsync(cacheKey);
+                return Results.Ok(cart);
+            });
 
-            if (string.IsNullOrEmpty(cached))
-                return Results.NotFound();
+            group.MapPost("/{userId}/items", async (
+               string userId,
+               CartItem item,
+               IDistributedCache cache,
+               IHttpClientFactory httpClientFactory) =>
+           {
+               if (item.Quantity <= 0)
+               {
+                   return Results.BadRequest("Quantity must be greater than zero.");
+               }
 
-            var cart = JsonSerializer.Deserialize<Cart>(cached);
+               var client = httpClientFactory.CreateClient("CatalogApi");
+               var response = await client.GetAsync($"/api/products/{item.ProductId}");
 
-            if (cart is null)
-                return Results.Problem("Failed to deserialize cart.");
+               if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+               {
+                   return Results.BadRequest("Product not found.");
+               }
 
-            var item = cart.Items.FirstOrDefault(x => x.ProductId == productId);
+               if (!response.IsSuccessStatusCode)
+               {
+                   return Results.Problem("CatalogService request failed.");
+               }
 
-            if (item is null)
-                return Results.NotFound();
+               var cacheKey = $"cart:{userId}";
+               var cached = await cache.GetStringAsync(cacheKey);
 
-            cart.Items.Remove(item);
+               var cart = string.IsNullOrEmpty(cached)
+                   ? new Cart(userId, new List<CartItem>())
+                   : JsonSerializer.Deserialize<Cart>(cached) ?? new Cart(userId, new List<CartItem>());
 
-            var json = JsonSerializer.Serialize(cart);
+               var existingItem = cart.Items.FirstOrDefault(x => x.ProductId == item.ProductId);
 
-            await cache.SetStringAsync(
-                cacheKey,
-                json,
-                new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
-                });
+               if (existingItem is not null)
+               {
+                   cart.Items.Remove(existingItem);
+                   cart.Items.Add(existingItem with
+                   {
+                       Quantity = existingItem.Quantity + item.Quantity
+                   });
+               }
+               else
+               {
+                   cart.Items.Add(item);
+               }
 
-            return Results.Ok(cart);
-        });
+               var json = JsonSerializer.Serialize(cart);
+
+               await cache.SetStringAsync(
+                   cacheKey,
+                   json,
+                   new DistributedCacheEntryOptions
+                   {
+                       AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
+                   });
+
+               return Results.Ok(cart);
+           });
+
+            group.MapDelete("/{userId}/items/{productId:int}", async (
+     string userId,
+     int productId,
+     IDistributedCache cache) =>
+ {
+     var cacheKey = $"cart:{userId}";
+     var cached = await cache.GetStringAsync(cacheKey);
+
+     if (string.IsNullOrEmpty(cached))
+         return Results.NotFound();
+
+     var cart = JsonSerializer.Deserialize<Cart>(cached);
+
+     if (cart is null)
+         return Results.Problem("Failed to deserialize cart.");
+
+     //var item = cart.Items.FirstOrDefault(x => x.ProductId == productId);
+    var index = cart.Items.FindIndex(x => x.ProductId == productId);
+
+    var item = cart.Items[index];
+
+
+     if (item is null)
+         return Results.NotFound();
+
+
+     if (index == -1)
+         return Results.NotFound();
+
+
+     if (item.Quantity > 1)
+     {
+         cart.Items[index] = item with
+         {
+             Quantity = item.Quantity - 1
+         };
+     }
+     else
+     {
+         cart.Items.RemoveAt(index);
+     }
+
+     var json = JsonSerializer.Serialize(cart);
+
+     await cache.SetStringAsync(
+         cacheKey,
+         json,
+         new DistributedCacheEntryOptions
+         {
+             AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
+         });
+
+     return Results.Ok(cart);
+ });
+        }
     }
-}
 }
