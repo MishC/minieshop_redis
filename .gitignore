@@ -1,2 +1,7 @@
 .env
+test
+/Migrations
+/bin
+/obj
+
 
