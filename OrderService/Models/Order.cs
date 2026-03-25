@@ -2,6 +2,7 @@ namespace OrderService.Models;
 
 public class Order
 {
+
     public Guid Id { get; set; } = Guid.NewGuid();
 
     public string UserId { get; set; } = default!;

@@ -8,21 +8,25 @@ public class OrderStore
 
     public Order Add(CreateOrderRequest request, List<OrderItem> items, decimal totalAmount)
     {
-        var order = new Order(
-            Guid.NewGuid(),
-            request.UserId,
-            request.Email,
-            request.Address,
-            request.City,
-            request.PostalCode,
-            request.Country,
-            items,
-            totalAmount,
-            DateTime.UtcNow
-        );
+        var order = new Order
+        {
+            UserId = request.UserId,
+            Email = request.Email,
+            Address = request.Address,
+            City = request.City,
+            PostalCode = request.PostalCode,
+            Country = request.Country,
+            CreatedAtUtc = DateTime.UtcNow,
+            TotalAmount = totalAmount,
+            Items = items
+        };
 
         Orders.Add(order);
 
         return order;
     }
 }
+
+
+
+

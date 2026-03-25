@@ -13,99 +13,95 @@ public static class OrderEndpoints
 
         group.MapGet("/health", async () => { Console.WriteLine("/api/orders works"); });
 
-        group.MapGet("/", (OrderStore store) =>
+        group.MapGet("/", (OrderDbContext db) =>
         {
-            return Results.Ok(store.Orders);
+            return Results.Ok(db.Orders.ToList());
         });
 
-        group.MapGet("/{id:guid}", (Guid id, OrderStore store) =>
+        group.MapGet("/{id:guid}", (Guid id, OrderDbContext db) =>
         {
-            var order = store.Orders.FirstOrDefault(x => x.Id == id);
+            var order = db.Orders.FirstOrDefault(x => x.Id == id);
             return order is null ? Results.NotFound() : Results.Ok(order);
         });
 
-        group.MapGet("/user/{userId}", (string userId, OrderStore store) =>
+        group.MapGet("/user/{userId}", (string userId, OrderDbContext db) =>
         {
-            var orders = store.Orders.Where(x => x.UserId == userId).ToList();
+            var orders = db.Orders.Where(x => x.UserId == userId).ToList();
             return Results.Ok(orders);
         });
 
         group.MapPost("/", async (
-            CreateOrderRequest request,
-            OrderStore store,
-            IHttpClientFactory httpClientFactory) =>
+        CreateOrderRequest request,
+        OrderDbContext db,
+        IHttpClientFactory httpClientFactory) =>
+    {
+        var cartClient = httpClientFactory.CreateClient("CartApi");
+        var catalogClient = httpClientFactory.CreateClient("CatalogApi");
+
+        var cartResponse = await cartClient.GetAsync($"/api/cart/{request.UserId}");
+
+        if (cartResponse.StatusCode == HttpStatusCode.NotFound)
+            return Results.BadRequest("Cart not found.");
+
+        if (!cartResponse.IsSuccessStatusCode)
+            return Results.Problem("CartService request failed.");
+
+        var cart = await cartResponse.Content.ReadFromJsonAsync<CartResponse>();
+
+        if (cart is null)
+            return Results.Problem("Failed to read cart data.");
+
+        if (cart.Items is null || cart.Items.Count == 0)
+            return Results.BadRequest("Cart is empty.");
+
+        var order = new Order
         {
-            var cartClient = httpClientFactory.CreateClient("CartApi");
-            var catalogClient = httpClientFactory.CreateClient("CatalogApi");
+            UserId = request.UserId,
+            Email = request.Email,
+            Address = request.Address,
+            City = request.City,
+            PostalCode = request.PostalCode,
+            Country = request.Country,
+            CreatedAtUtc = DateTime.UtcNow
+        };
 
-            var cartResponse = await cartClient.GetAsync($"/api/cart/{request.UserId}");
+        foreach (var cartItem in cart.Items)
+        {
+            var productResponse = await catalogClient.GetAsync($"/api/products/{cartItem.ProductId}");
 
-            if (cartResponse.StatusCode == HttpStatusCode.NotFound)
+            if (productResponse.StatusCode == HttpStatusCode.NotFound)
+                return Results.BadRequest($"Product {cartItem.ProductId} not found.");
+
+            if (!productResponse.IsSuccessStatusCode)
+                return Results.Problem("CatalogService request failed.");
+
+            var product = await productResponse.Content.ReadFromJsonAsync<ProductResponse>();
+
+            if (product is null)
+                return Results.Problem($"Failed to read product {cartItem.ProductId}.");
+
+            order.Items.Add(new OrderItem
             {
-                return Results.BadRequest("Cart not found.");
-            }
+                ProductId = product.Id,
+                ProductName = product.Name,
+                UnitPrice = product.Price,
+                Quantity = cartItem.Quantity
+            });
+        }
 
-            if (!cartResponse.IsSuccessStatusCode)
-            {
-                return Results.Problem("CartService request failed.");
-            }
+        order.TotalAmount = order.Items.Sum(i => i.UnitPrice * i.Quantity);
 
-            var cart = await cartResponse.Content.ReadFromJsonAsync<CartResponse>();
+        // 🔥 SAVE TO DB
+        db.Orders.Add(order);
+        await db.SaveChangesAsync();
 
-            if (cart is null)
-            {
-                return Results.Problem("Failed to read cart data.");
-            }
+        // 🔥 clear cart (tvoj spôsob — OK)
+        foreach (var item in cart.Items)
+        {
+            await cartClient.DeleteAsync($"/api/cart/{request.UserId}/items/{item.ProductId}");
+        }
 
-            if (cart.Items is null || cart.Items.Count == 0)
-            {
-                return Results.BadRequest("Cart is empty.");
-            }
-
-            var orderItems = new List<OrderItem>();
-
-            foreach (var cartItem in cart.Items)
-            {
-                var productResponse = await catalogClient.GetAsync($"/api/products/{cartItem.ProductId}");
-
-                if (productResponse.StatusCode == HttpStatusCode.NotFound)
-                {
-                    return Results.BadRequest($"Product with id {cartItem.ProductId} was not found.");
-                }
-
-                if (!productResponse.IsSuccessStatusCode)
-                {
-                    return Results.Problem("CatalogService request failed.");
-                }
-
-                var product = await productResponse.Content.ReadFromJsonAsync<ProductResponse>();
-
-                if (product is null)
-                {
-                    return Results.Problem($"Failed to read product {cartItem.ProductId}.");
-                }
-
-                var lineTotal = product.Price * cartItem.Quantity;
-
-                orderItems.Add(new OrderItem(
-                    product.Id,
-                    product.Name,
-                    product.Price,
-                    cartItem.Quantity,
-                    lineTotal
-                ));
-            }
-
-            var totalAmount = orderItems.Sum(x => x.LineTotal);
-
-            var createdOrder = store.Add(request, orderItems, totalAmount);
-
-            foreach (var item in cart.Items)
-            {
-                await cartClient.DeleteAsync($"/api/cart/{request.UserId}/items/{item.ProductId}");
-            }
-
-            return Results.Created($"/api/orders/{createdOrder.Id}", createdOrder);
-        });
+        return Results.Created($"/api/orders/{order.Id}", order);
+    });
     }
 }
