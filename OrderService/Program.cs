@@ -27,11 +27,6 @@ builder.Services.AddHttpClient("CatalogApi", client =>
 builder.Services.AddDbContext<OrderDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 //builder.Services.AddSingleton<OrderStore>();
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
-    db.Database.Migrate();
-}
 
 var app = builder.Build();
 
@@ -39,5 +34,26 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.MapOrderEndpoints();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
+
+    var retries = 10;
+
+    while (retries > 0)
+    {
+        try
+        {
+            db.Database.Migrate();
+            break;
+        }
+        catch
+        {
+            retries--;
+            Thread.Sleep(2000);
+        }
+    }
+}
 
 app.Run();
