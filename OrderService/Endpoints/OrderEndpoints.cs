@@ -11,7 +11,7 @@ public static class OrderEndpoints
     {
         var group = app.MapGroup("/api/orders");
 
-        group.MapGet("/health", async () => { Console.WriteLine("/api/orders works"); });
+        group.MapGet("/health", async () => { return Results.Ok("/api/orders works"); });
 
         group.MapGet("/", (OrderDbContext db) =>
         {

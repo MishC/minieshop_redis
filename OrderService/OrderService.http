@@ -1,13 +1,13 @@
 @baseUrl = http://localhost:7000
 
 #Health check
-GET {{baseUrl}}/health/  
+GET {{baseUrl}}/orders/health/  
 
 
 ### Create order
 
 ### Create order through gateway
-POST {{baseUrl}}/orders/
+POST {{baseUrl}}/orders
 Content-Type: application/json
 Accept: application/json
 
