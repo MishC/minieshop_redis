@@ -1,5 +1,5 @@
-using System.Text.Json;
-using Microsoft.Extensions.Caching.Distributed;
+using System.Net;
+using System.Net.Http.Json;
 using OrderService.Data;
 using OrderService.Models;
 
@@ -11,81 +11,101 @@ public static class OrderEndpoints
     {
         var group = app.MapGroup("/api/orders");
 
-        group.MapPost("/", async (CreateOrderRequest request, OrderStore store, IDistributedCache cache) =>
+        group.MapGet("/health", async () => { Console.WriteLine("/api/orders works"); });
+
+        group.MapGet("/", (OrderStore store) =>
         {
-            var order = new Order(
-                Guid.NewGuid(),
-                request.UserId,
-                request.Items,
-                DateTime.UtcNow
-            );
-
-            store.Orders.Add(order);
-
-            await cache.RemoveAsync("orders:all");
-            await cache.RemoveAsync($"orders:user:{request.UserId}");
-            await cache.RemoveAsync($"orders:{order.Id}");
-
-            return Results.Created($"/api/orders/{order.Id}", order);
+            return Results.Ok(store.Orders);
         });
 
-        group.MapGet("/{id:guid}", async (Guid id, OrderStore store, IDistributedCache cache) =>
+        group.MapGet("/{id:guid}", (Guid id, OrderStore store) =>
         {
-            var cacheKey = $"orders:{id}";
-            var cached = await cache.GetStringAsync(cacheKey);
-
-            if (!string.IsNullOrEmpty(cached))
-            {
-                var cachedOrder = JsonSerializer.Deserialize<Order>(cached);
-                return Results.Ok(cachedOrder);
-            }
-
             var order = store.Orders.FirstOrDefault(x => x.Id == id);
-
-            if (order is null)
-                return Results.NotFound();
-
-            var json = JsonSerializer.Serialize(order);
-
-            await cache.SetStringAsync(
-                cacheKey,
-                json,
-                new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
-                });
-
-            return Results.Ok(order);
+            return order is null ? Results.NotFound() : Results.Ok(order);
         });
 
-        group.MapGet("/user/{userId}", async (string userId, OrderStore store, IDistributedCache cache) =>
+        group.MapGet("/user/{userId}", (string userId, OrderStore store) =>
         {
-            var cacheKey = $"orders:user:{userId}";
-            var cached = await cache.GetStringAsync(cacheKey);
-
-            if (!string.IsNullOrEmpty(cached))
-            {
-                var cachedOrders = JsonSerializer.Deserialize<List<Order>>(cached);
-                return Results.Ok(cachedOrders);
-            }
-
-            var orders = store.Orders
-                .Where(x => x.UserId == userId)
-                .ToList();
-
-            var json = JsonSerializer.Serialize(orders);
-
-            await cache.SetStringAsync(
-                cacheKey,
-                json,
-                new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
-                });
-
+            var orders = store.Orders.Where(x => x.UserId == userId).ToList();
             return Results.Ok(orders);
         });
-   
+
+        group.MapPost("/", async (
+            CreateOrderRequest request,
+            OrderStore store,
+            IHttpClientFactory httpClientFactory) =>
+        {
+            var cartClient = httpClientFactory.CreateClient("CartApi");
+            var catalogClient = httpClientFactory.CreateClient("CatalogApi");
+
+            var cartResponse = await cartClient.GetAsync($"/api/cart/{request.UserId}");
+
+            if (cartResponse.StatusCode == HttpStatusCode.NotFound)
+            {
+                return Results.BadRequest("Cart not found.");
+            }
+
+            if (!cartResponse.IsSuccessStatusCode)
+            {
+                return Results.Problem("CartService request failed.");
+            }
+
+            var cart = await cartResponse.Content.ReadFromJsonAsync<CartResponse>();
+
+            if (cart is null)
+            {
+                return Results.Problem("Failed to read cart data.");
+            }
+
+            if (cart.Items is null || cart.Items.Count == 0)
+            {
+                return Results.BadRequest("Cart is empty.");
+            }
+
+            var orderItems = new List<OrderItem>();
+
+            foreach (var cartItem in cart.Items)
+            {
+                var productResponse = await catalogClient.GetAsync($"/api/products/{cartItem.ProductId}");
+
+                if (productResponse.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return Results.BadRequest($"Product with id {cartItem.ProductId} was not found.");
+                }
+
+                if (!productResponse.IsSuccessStatusCode)
+                {
+                    return Results.Problem("CatalogService request failed.");
+                }
+
+                var product = await productResponse.Content.ReadFromJsonAsync<ProductResponse>();
+
+                if (product is null)
+                {
+                    return Results.Problem($"Failed to read product {cartItem.ProductId}.");
+                }
+
+                var lineTotal = product.Price * cartItem.Quantity;
+
+                orderItems.Add(new OrderItem(
+                    product.Id,
+                    product.Name,
+                    product.Price,
+                    cartItem.Quantity,
+                    lineTotal
+                ));
+            }
+
+            var totalAmount = orderItems.Sum(x => x.LineTotal);
+
+            var createdOrder = store.Add(request, orderItems, totalAmount);
+
+            foreach (var item in cart.Items)
+            {
+                await cartClient.DeleteAsync($"/api/cart/{request.UserId}/items/{item.ProductId}");
+            }
+
+            return Results.Created($"/api/orders/{createdOrder.Id}", createdOrder);
+        });
     }
 }
-
