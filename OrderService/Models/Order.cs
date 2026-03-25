@@ -26,16 +26,6 @@ public record CreateOrderRequest(
     string PostalCode,
     string Country
 );
-public record ProductResponse(
-    int Id,
-    string Name,
-    decimal Price
-);
-
-public record CartItemResponse(
-    int ProductId,
-    int Quantity
-);
 
 public record CartResponse(
     string UserId,
