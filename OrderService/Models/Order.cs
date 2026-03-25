@@ -1,17 +1,21 @@
 namespace OrderService.Models;
 
-public record Order(
-    Guid Id,
-    string UserId,
-    string Email,
-    string Address,
-    string City,
-    string PostalCode,
-    string Country,
-    List<OrderItem> Items,
-    decimal TotalAmount,
-    DateTime CreatedAtUtc
-);
+public class Order
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    public string UserId { get; set; } = default!;
+    public string Email { get; set; } = default!;
+    public string Address { get; set; } = default!;
+    public string City { get; set; } = default!;
+    public string PostalCode { get; set; } = default!;
+    public string Country { get; set; } = default!;
+
+    public decimal TotalAmount { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    public List<OrderItem> Items { get; set; } = new();
+}
 //DTO - from client
 public record CreateOrderRequest(
     string UserId,
