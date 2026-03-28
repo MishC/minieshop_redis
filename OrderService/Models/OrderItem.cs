@@ -26,7 +26,7 @@ public record CartItemResponse(
     int ProductId,
     int Quantity
 );
-);
+
 public record ProductResponse(
     int Id,
     string Name,
