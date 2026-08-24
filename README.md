@@ -1,63 +1,63 @@
 # ShopMicroservices
 
-Toto je ukazkovy .NET 9 mikroservisny e-shop:
+ShopMicroservices is a sample .NET 9 microservices e-commerce application.
 
-- `Gateway` je API gateway cez YARP.
-- `CatalogService` drzi produkty v PostgreSQL.
-- `CartService` drzi kosik v Redis.
-- `OrderService` drzi objednavky v PostgreSQL.
-- Redis drzi aj prihlasenych pouzivatelov, session a naposledy pozerane produkty.
+- `Gateway` is the public API gateway built with YARP.
+- `CatalogService` stores products in PostgreSQL.
+- `CartService` stores shopping carts in Redis.
+- `OrderService` stores orders in PostgreSQL.
+- Redis is also used for users, login sessions, and recently viewed products.
 
-## Spustenie
+## Running The Project
 
-Z korena projektu:
+Run the whole stack from the project root:
 
 ```bash
 docker compose up --build
 ```
 
-Gateway potom bezi na:
+The gateway will be available at:
 
 ```text
 http://localhost:7000
 ```
 
-## Autentifikacia
+## Authentication
 
-Autentifikacia je cez JWT ulozeny v `HttpOnly` cookie:
+Authentication uses a JWT access token stored in an `HttpOnly` cookie:
 
 ```text
 access_token
 ```
 
-Po `register` alebo `login` backend posle cookie cez `Set-Cookie`. Browser ju potom automaticky posiela pri dalsich requestoch. JavaScript ju nevie precitat, lebo je `HttpOnly`.
+After `register` or `login`, the backend sends the cookie with `Set-Cookie`. The browser stores it and automatically sends it with later API requests. JavaScript cannot read this cookie because it is `HttpOnly`.
 
-Refresh cookie zatial nie je implementovana.
+Refresh cookies are not implemented yet.
 
-Pri kazdom prihlaseni sa vytvori browser/session id cez:
+Each login creates a browser-specific session id with:
 
 ```csharp
 Guid.NewGuid()
 ```
 
-Session id sa ulozi do JWT ako `sid` a zaroven do Redis:
+The session id is stored inside the JWT as the `sid` claim and is also stored in Redis:
 
 ```text
 auth:session:{sessionId}
 ```
 
-Logout zmaze cookie aj Redis session.
+Logout removes both the cookie and the Redis session.
 
 ## Role
 
-Pouzivatelia maju roly:
+The application uses two roles:
 
 ```text
 Admin
 Customer
 ```
 
-Admin emaily su v `Gateway/appsettings.json`:
+Admin emails are configured in `Gateway/appsettings.json`:
 
 ```json
 "Auth": {
@@ -67,29 +67,29 @@ Admin emaily su v `Gateway/appsettings.json`:
 }
 ```
 
-Admin-only endpointy:
+Admin-only product endpoints:
 
 ```text
 GET  /products
 POST /products
 ```
 
-Bezny prihlaseny alebo neprihlaseny pouzivatel ma pouzivat detail produktu:
+Regular users should access product details by id:
 
 ```text
 GET /products/1
 GET /products/2
 ```
 
-## RecentViews
+## Recent Views
 
-Naposledy pozerane produkty su ulozene v Redis pod session id:
+Recently viewed products are stored in Redis by session id:
 
 ```text
 catalog:recently-viewed:{sessionId}
 ```
 
-Endpointy:
+Available endpoints:
 
 ```text
 GET /RecentViews
@@ -97,55 +97,64 @@ GET /products/RecentViews
 GET /products/recently-viewed
 ```
 
-Tieto endpointy vyzaduju prihlasenie.
+These endpoints require authentication.
 
 ## Cart
 
-Kosik je ulozeny v Redis pod user id aj session id:
+The shopping cart is stored in Redis by user id and session id:
 
 ```text
 cart:{userId}:{sessionId}
 ```
 
-To znamena, ze rovnaky user moze mat v dvoch browseroch rozdielny kosik.
+This means the same user can have different carts in different browsers or sessions.
 
-## CLI autorizacia
+## Auth CLI
 
-Len registracia/login/logout/me:
+Use this script for authentication only:
 
 ```bash
 python3 auth_cli.py
 ```
 
-Script si cookie ulozi do suboru:
+It supports:
+
+```text
+Register
+Login
+Me
+Logout
+```
+
+The CLI stores the authentication cookie in:
 
 ```text
 .shop_cli_cookies.txt
 ```
 
-## CLI e-shop test
+## Shop CLI
 
-Interaktivny test produktu, kosika a objednavky:
+Use this script to test the full shopping flow:
 
 ```bash
 python3 shop_cli.py
 ```
 
-V menu vies:
+The interactive menu can:
 
-- registrovat alebo prihlasit pouzivatela,
-- otvorit detail produktu podla cisla,
-- pozriet RecentViews,
-- pridat produkt do kosika,
-- zobrazit kosik,
-- odstranit jeden kus z kosika,
-- vytvorit objednavku,
-- zobrazit objednavky,
-- odhlasit sa.
+- register or log in a user,
+- open a product detail by product id,
+- show recent views,
+- add a product to the cart,
+- show the cart,
+- remove one item from the cart,
+- create an order,
+- show the current user's orders,
+- log out.
 
-## Curl priklady
+## Curl Examples
 
-Registracia bezneho pouzivatela:
+Register a regular user:
 
 ```bash
 curl -i -c user.cookies \
@@ -154,28 +163,28 @@ curl -i -c user.cookies \
   -d '{"email":"user@test.com","password":"password123"}'
 ```
 
-GET detail produktu:
+Get product detail:
 
 ```bash
 curl -b user.cookies \
   http://localhost:7000/products/1
 ```
 
-GET RecentViews:
+Get recent views:
 
 ```bash
 curl -b user.cookies \
   http://localhost:7000/RecentViews
 ```
 
-GET kosik:
+Get the current user's cart:
 
 ```bash
 curl -b user.cookies \
   http://localhost:7000/cart/{userId}
 ```
 
-Pridanie produktu do kosika:
+Add a product to the cart:
 
 ```bash
 curl -b user.cookies \
@@ -184,7 +193,7 @@ curl -b user.cookies \
   -d '{"productId":1,"quantity":2}'
 ```
 
-Vytvorenie objednavky:
+Create an order:
 
 ```bash
 curl -b user.cookies \
@@ -200,7 +209,7 @@ curl -b user.cookies \
   }'
 ```
 
-Admin registracia:
+Register an admin user:
 
 ```bash
 curl -i -c admin.cookies \
@@ -209,10 +218,9 @@ curl -i -c admin.cookies \
   -d '{"email":"admin@test.com","password":"password123"}'
 ```
 
-Admin GET vsetky produkty:
+Admin-only product list:
 
 ```bash
 curl -b admin.cookies \
   http://localhost:7000/products
 ```
-
