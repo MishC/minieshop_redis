@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using OrderService.Data;
 using OrderService.Models;
 
@@ -9,23 +11,35 @@ public static class OrderEndpoints
 {
     public static void MapOrderEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/orders");
+        app.MapGet("/api/orders/health", () => Results.Ok("/api/orders works"));
 
-        group.MapGet("/health", async () => { return Results.Ok("/api/orders works"); });
+        var group = app.MapGroup("/api/orders").RequireAuthorization();
 
-        group.MapGet("/", (OrderDbContext db) =>
+        group.MapGet("/", (OrderDbContext db, ClaimsPrincipal user) =>
         {
-            return Results.Ok(db.Orders.ToList());
+            var currentUserId = GetCurrentUserId(user);
+            return Results.Ok(db.Orders.Where(x => x.UserId == currentUserId).ToList());
         });
 
-        group.MapGet("/{id:guid}", (Guid id, OrderDbContext db) =>
+        group.MapGet("/{id:guid}", (Guid id, OrderDbContext db, ClaimsPrincipal user) =>
         {
+            var currentUserId = GetCurrentUserId(user);
             var order = db.Orders.FirstOrDefault(x => x.Id == id);
+            if (order is not null && order.UserId != currentUserId)
+            {
+                return Results.Forbid();
+            }
+
             return order is null ? Results.NotFound() : Results.Ok(order);
         });
 
-        group.MapGet("/user/{userId}", (string userId, OrderDbContext db) =>
+        group.MapGet("/user/{userId}", (string userId, OrderDbContext db, ClaimsPrincipal user) =>
         {
+            if (!CanAccessUserOrders(user, userId))
+            {
+                return Results.Forbid();
+            }
+
             var orders = db.Orders.Where(x => x.UserId == userId).ToList();
             return Results.Ok(orders);
         });
@@ -33,9 +47,18 @@ public static class OrderEndpoints
         group.MapPost("/", async (
         CreateOrderRequest request,
         OrderDbContext db,
-        IHttpClientFactory httpClientFactory) =>
+        IHttpClientFactory httpClientFactory,
+        ClaimsPrincipal user,
+        HttpContext httpContext) =>
     {
+        if (!CanAccessUserOrders(user, request.UserId))
+        {
+            return Results.Forbid();
+        }
+
         var cartClient = httpClientFactory.CreateClient("CartApi");
+        ForwardAuthContext(httpContext, cartClient);
+
         var catalogClient = httpClientFactory.CreateClient("CatalogApi");
 
         var cartResponse = await cartClient.GetAsync($"/api/cart/{request.UserId}");
@@ -103,5 +126,30 @@ public static class OrderEndpoints
 
         return Results.Created($"/api/orders/{order.Id}", order);
     });
+    }
+
+    private static bool CanAccessUserOrders(ClaimsPrincipal user, string userId)
+    {
+        var currentUserId = GetCurrentUserId(user);
+        return string.Equals(currentUserId, userId, StringComparison.Ordinal);
+    }
+
+    private static string GetCurrentUserId(ClaimsPrincipal user)
+    {
+        return user.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? throw new InvalidOperationException("Authenticated user id is missing.");
+    }
+
+    private static void ForwardAuthContext(HttpContext httpContext, HttpClient client)
+    {
+        if (AuthenticationHeaderValue.TryParse(httpContext.Request.Headers.Authorization, out var authorization))
+        {
+            client.DefaultRequestHeaders.Authorization = authorization;
+        }
+
+        if (!string.IsNullOrEmpty(httpContext.Request.Headers.Cookie))
+        {
+            client.DefaultRequestHeaders.Add("Cookie", httpContext.Request.Headers.Cookie.ToString());
+        }
     }
 }

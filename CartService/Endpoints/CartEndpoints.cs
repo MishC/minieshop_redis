@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Net.Http.Json;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using CartService.Models;
 using Microsoft.Extensions.Caching.Distributed;
 
@@ -10,13 +12,18 @@ namespace CartService.Endpoints
     {
         public static void MapCartEndpoints(this WebApplication app)
         {
-            var group = app.MapGroup("/api/cart");
+            app.MapGet("/api/cart/health", () => Results.Ok("/api/cart works"));
 
-            group.MapGet("/health", async () => { Console.WriteLine("/api/cart works"); });
+            var group = app.MapGroup("/api/cart").RequireAuthorization();
 
-            group.MapGet("/{userId}", async (string userId, IDistributedCache cache) =>
+            group.MapGet("/{userId}", async (string userId, ClaimsPrincipal user, IDistributedCache cache) =>
             {
-                var cacheKey = $"cart:{userId}";
+                if (!CanAccessUserCart(user, userId))
+                {
+                    return Results.Forbid();
+                }
+
+                var cacheKey = GetCartKey(userId, GetCurrentSessionId(user));
                 var cached = await cache.GetStringAsync(cacheKey);
 
                 Cart cart;
@@ -48,9 +55,15 @@ namespace CartService.Endpoints
             group.MapPost("/{userId}/items", async (
                string userId,
                CartItem item,
+               ClaimsPrincipal user,
                IDistributedCache cache,
                IHttpClientFactory httpClientFactory) =>
            {
+               if (!CanAccessUserCart(user, userId))
+               {
+                   return Results.Forbid();
+               }
+
                if (item.Quantity <= 0)
                {
                    return Results.BadRequest("Quantity must be greater than zero.");
@@ -69,7 +82,7 @@ namespace CartService.Endpoints
                    return Results.Problem("CatalogService request failed.");
                }
 
-               var cacheKey = $"cart:{userId}";
+               var cacheKey = GetCartKey(userId, GetCurrentSessionId(user));
                var cached = await cache.GetStringAsync(cacheKey);
 
                var cart = string.IsNullOrEmpty(cached)
@@ -107,9 +120,13 @@ namespace CartService.Endpoints
             group.MapDelete("/{userId}/items/{productId:int}", async (
      string userId,
      int productId,
+     ClaimsPrincipal user,
      IDistributedCache cache) =>
  {
-     var cacheKey = $"cart:{userId}";
+     if (!CanAccessUserCart(user, userId))
+         return Results.Forbid();
+
+     var cacheKey = GetCartKey(userId, GetCurrentSessionId(user));
      var cached = await cache.GetStringAsync(cacheKey);
 
      if (string.IsNullOrEmpty(cached))
@@ -120,19 +137,11 @@ namespace CartService.Endpoints
      if (cart is null)
          return Results.Problem("Failed to deserialize cart.");
 
-     //var item = cart.Items.FirstOrDefault(x => x.ProductId == productId);
     var index = cart.Items.FindIndex(x => x.ProductId == productId);
-
-    var item = cart.Items[index];
-
-
-     if (item is null)
-         return Results.NotFound();
-
-
      if (index == -1)
          return Results.NotFound();
 
+    var item = cart.Items[index];
 
      if (item.Quantity > 1)
      {
@@ -158,6 +167,24 @@ namespace CartService.Endpoints
 
      return Results.Ok(cart);
  });
+        }
+
+        private static bool CanAccessUserCart(ClaimsPrincipal user, string userId)
+        {
+            var currentUserId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            return string.Equals(currentUserId, userId, StringComparison.Ordinal);
+        }
+
+        private static string GetCartKey(string userId, string sessionId)
+        {
+            return $"cart:{userId}:{sessionId}";
+        }
+
+        private static string GetCurrentSessionId(ClaimsPrincipal user)
+        {
+            return user.FindFirstValue(JwtRegisteredClaimNames.Sid)
+                ?? user.FindFirstValue(ClaimTypes.Sid)
+                ?? throw new InvalidOperationException("Authenticated session id is missing.");
         }
     }
 }

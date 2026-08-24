@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using CatalogService.Data;
 using CatalogService.Models;
 using Microsoft.EntityFrameworkCore;
@@ -8,8 +10,6 @@ namespace CatalogService.Endpoints{
 
 public static class ProductEndpoints
 {
-    private const string RecentlyViewedKey = "catalog:recently-viewed";
-
     public static void MapProductEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/products");
@@ -24,9 +24,9 @@ public static class ProductEndpoints
             return Results.Ok(products);
         });
 
-        group.MapGet("/recently-viewed", async (CatalogDbContext db, IDistributedCache cache) =>
+        group.MapGet("/recently-viewed", async (CatalogDbContext db, ClaimsPrincipal user, IDistributedCache cache) =>
         {
-            var productIds = await GetRecentlyViewedProductIdsAsync(cache);
+            var productIds = await GetRecentlyViewedProductIdsAsync(cache, GetCurrentSessionId(user));
 
             if (productIds.Count == 0)
             {
@@ -43,9 +43,30 @@ public static class ProductEndpoints
                 .ToList();
 
             return Results.Ok(orderedProducts);
-        });
+        }).RequireAuthorization();
 
-        group.MapGet("/{id:int}", async (int id, CatalogDbContext db, IDistributedCache cache) =>
+        group.MapGet("/RecentViews", async (CatalogDbContext db, ClaimsPrincipal user, IDistributedCache cache) =>
+        {
+            var productIds = await GetRecentlyViewedProductIdsAsync(cache, GetCurrentSessionId(user));
+
+            if (productIds.Count == 0)
+            {
+                return Results.Ok(Array.Empty<Product>());
+            }
+
+            var products = await db.Products
+                .Where(p => productIds.Contains(p.Id))
+                .ToListAsync();
+
+            var orderedProducts = productIds
+                .Select(id => products.FirstOrDefault(p => p.Id == id))
+                .Where(product => product is not null)
+                .ToList();
+
+            return Results.Ok(orderedProducts);
+        }).RequireAuthorization();
+
+        group.MapGet("/{id:int}", async (int id, CatalogDbContext db, ClaimsPrincipal user, IDistributedCache cache) =>
         {
             var product = await db.Products.FindAsync(id);
             if (product is null)
@@ -53,7 +74,10 @@ public static class ProductEndpoints
                 return Results.NotFound();
             }
 
-            await SaveRecentlyViewedProductAsync(cache, product.Id);
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                await SaveRecentlyViewedProductAsync(cache, GetCurrentSessionId(user), product.Id);
+            }
 
             return Results.Ok(product);
         });
@@ -73,29 +97,41 @@ public static class ProductEndpoints
         });
     }
 
-    private static async Task<List<int>> GetRecentlyViewedProductIdsAsync(IDistributedCache cache)
+    private static async Task<List<int>> GetRecentlyViewedProductIdsAsync(IDistributedCache cache, string userId)
     {
-        var cachedJson = await cache.GetStringAsync(RecentlyViewedKey);
+        var cachedJson = await cache.GetStringAsync(GetRecentlyViewedKey(userId));
         return string.IsNullOrEmpty(cachedJson)
             ? new List<int>()
             : JsonSerializer.Deserialize<List<int>>(cachedJson) ?? new List<int>();
     }
 
-    private static async Task SaveRecentlyViewedProductAsync(IDistributedCache cache, int productId)
+    private static async Task SaveRecentlyViewedProductAsync(IDistributedCache cache, string userId, int productId)
     {
-        var productIds = await GetRecentlyViewedProductIdsAsync(cache);
+        var productIds = await GetRecentlyViewedProductIdsAsync(cache, userId);
 
         productIds.Remove(productId);
         productIds.Insert(0, productId);
         productIds = productIds.Take(10).ToList();
 
         await cache.SetStringAsync(
-            RecentlyViewedKey,
+            GetRecentlyViewedKey(userId),
             JsonSerializer.Serialize(productIds),
             new DistributedCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(7)
             });
+    }
+
+    private static string GetRecentlyViewedKey(string sessionId)
+    {
+        return $"catalog:recently-viewed:{sessionId}";
+    }
+
+    private static string GetCurrentSessionId(ClaimsPrincipal user)
+    {
+        return user.FindFirstValue(JwtRegisteredClaimNames.Sid)
+            ?? user.FindFirstValue(ClaimTypes.Sid)
+            ?? throw new InvalidOperationException("Authenticated session id is missing.");
     }
 }
 }

@@ -30,6 +30,10 @@ services:
     environment:
       ConnectionStrings__DefaultConnection: ${CONNECTION_STRING}
       ConnectionStrings__Redis: redis:6379
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      AuthCookie__Name: access_token
 
   cartservice:
     build:
@@ -40,6 +44,11 @@ services:
       - "5002:8080"
     depends_on:
       - redis
+    environment:
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      AuthCookie__Name: access_token
 
   orderservice:
     build:
@@ -50,8 +59,14 @@ services:
       - "5003:8080"
     depends_on:
       - postgres
+      - redis
     environment:
       ConnectionStrings__DefaultConnection: ${CONNECTION_STRING}
+      ConnectionStrings__Redis: redis:6379
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      AuthCookie__Name: access_token
   gateway:
     build:
       context: ./Gateway
@@ -60,9 +75,18 @@ services:
     ports:
       - "7000:8080"
     depends_on:
+      - redis
       - catalogservice
       - cartservice
       - orderservice
+    environment:
+      ConnectionStrings__Redis: redis:6379
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      AuthCookie__Name: access_token
+      AuthCookie__Secure: "false"
+      AuthCookie__SameSite: Lax
 
 volumes:
   postgres-data:
