@@ -130,7 +130,8 @@ The interactive menu can:
 - remove one item from the cart,
 - create an order,
 - show the current user's orders,
-- test the admin-only product list.
+- test the admin-only product list,
+- create a new product as admin.
 
 The CLI stores the authentication cookie in:
 
@@ -201,7 +202,7 @@ Register an admin user:
 curl -i -c admin.cookies \
   -X POST http://localhost:7000/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@test.com","password":"password123"}'
+  -d '{"email":"admin@test.com","password":"password1234"}'
 ```
 
 Admin-only product list:
@@ -209,4 +210,13 @@ Admin-only product list:
 ```bash
 curl -b admin.cookies \
   http://localhost:7000/products
+```
+
+Admin-only add product:
+
+```bash
+curl -b admin.cookies \
+  -X POST http://localhost:7000/products \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Admin Product","price":42.5}'
 ```

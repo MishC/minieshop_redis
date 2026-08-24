@@ -146,6 +146,24 @@ def prompt_int(label, default=None):
             print("Please enter a valid number.")
 
 
+def prompt_decimal(label):
+    """Ask for a decimal number and return it as a JSON number."""
+    while True:
+        raw = input(label).strip()
+
+        try:
+            value = float(raw)
+        except ValueError:
+            print("Please enter a valid price, for example 19.99.")
+            continue
+
+        if value < 0:
+            print("Price cannot be negative.")
+            continue
+
+        return value
+
+
 def auth_payload(is_register):
     """Build the request body for register/login."""
     return {
@@ -311,6 +329,24 @@ def admin_products():
     print_status_hint(status)
 
 
+def admin_add_product():
+    """Menu 14: admin-only POST /products."""
+    name = input("New product name: ").strip()
+    if not name:
+        print("Product name cannot be empty.")
+        return
+
+    price = prompt_decimal("New product price: ")
+    body = {
+        "name": name,
+        "price": price,
+    }
+
+    status, payload = call_api("POST", "/products", body)
+    print_response(status, payload)
+    print_status_hint(status)
+
+
 def print_menu():
     print("\n=== ShopMicroservices CLI ===")
     print("0. Exit - close the CLI")
@@ -327,6 +363,7 @@ def print_menu():
     print("11. Create order - POST /orders from current cart")
     print("12. My orders - GET /orders")
     print("13. Admin products - admin-only GET /products")
+    print("14. Admin add product - admin-only POST /products")
 
 
 def main():
@@ -362,6 +399,8 @@ def main():
             show_orders()
         elif choice == "13":
             admin_products()
+        elif choice == "14":
+            admin_add_product()
         else:
             print("Unknown option.")
 
