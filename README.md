@@ -141,10 +141,18 @@ The CLI stores the authentication cookie in:
 
 ## Curl Examples
 
+Cookie options used below:
+
+```text
+-i reads and sends headers
+-c file  saves cookies received from the server into file
+-b file  sends cookies from file with the next request
+```
+
 Register a regular user:
 
 ```bash
-curl -i -c user.cookies \
+curl -i -c .user.cookies.txt \
   -X POST http://localhost:7000/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"user@test.com","password":"password123"}'
@@ -153,28 +161,28 @@ curl -i -c user.cookies \
 Get product detail:
 
 ```bash
-curl -b user.cookies \
+curl -b .user.cookies.txt \
   http://localhost:7000/products/1
 ```
 
 Get recent views:
 
 ```bash
-curl -b user.cookies \
+curl -b .user.cookies.txt \
   http://localhost:7000/RecentViews
 ```
 
 Get the current user's cart:
 
 ```bash
-curl -b user.cookies \
+curl -b .user.cookies.txt \
   http://localhost:7000/cart/{userId}
 ```
 
 Add a product to the cart:
 
 ```bash
-curl -b user.cookies \
+curl -b .user.cookies.txt \
   -X POST http://localhost:7000/cart/{userId}/items \
   -H "Content-Type: application/json" \
   -d '{"productId":1,"quantity":2}'
@@ -183,7 +191,7 @@ curl -b user.cookies \
 Create an order:
 
 ```bash
-curl -b user.cookies \
+curl -b .user.cookies.txt \
   -X POST http://localhost:7000/orders \
   -H "Content-Type: application/json" \
   -d '{
@@ -199,8 +207,17 @@ curl -b user.cookies \
 Register an admin user:
 
 ```bash
-curl -i -c admin.cookies \
+curl -i -c .admin.cookies.txt \
   -X POST http://localhost:7000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@test.com","password":"password1234"}'
+```
+
+If the admin user already exists, log in instead:
+
+```bash
+curl -i -c .admin.cookies.txt \
+  -X POST http://localhost:7000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@test.com","password":"password1234"}'
 ```
@@ -208,14 +225,14 @@ curl -i -c admin.cookies \
 Admin-only product list:
 
 ```bash
-curl -b admin.cookies \
+curl -b .admin.cookies.txt \
   http://localhost:7000/products
 ```
 
 Admin-only add product:
 
 ```bash
-curl -b admin.cookies \
+curl -b .admin.cookies.txt \
   -X POST http://localhost:7000/products \
   -H "Content-Type: application/json" \
   -d '{"name":"Admin Product","price":42.5}'
