@@ -18,7 +18,7 @@ builder.Services.AddDbContext<CatalogDbContext>(options =>
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = builder.Configuration.GetConnectionString("Redis");
-    options.InstanceName = "catalog-service:";
+    options.InstanceName = "shop:";
 });
 
 builder.Services

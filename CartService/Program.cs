@@ -14,7 +14,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = builder.Configuration.GetConnectionString("Redis");
-    options.InstanceName = "cart-service:";
+    options.InstanceName = "shop:";
 });
 
 builder.Services.AddHttpClient("CatalogApi", client =>

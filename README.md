@@ -109,32 +109,9 @@ cart:{userId}:{sessionId}
 
 This means the same user can have different carts in different browsers or sessions.
 
-## Auth CLI
+## CLI
 
-Use this script for authentication only:
-
-```bash
-python3 auth_cli.py
-```
-
-It supports:
-
-```text
-Register
-Login
-Me
-Logout
-```
-
-The CLI stores the authentication cookie in:
-
-```text
-.shop_cli_cookies.txt
-```
-
-## Shop CLI
-
-Use this script to test the full shopping flow:
+Use this script to test authentication and the full shopping flow:
 
 ```bash
 python3 shop_cli.py
@@ -143,6 +120,9 @@ python3 shop_cli.py
 The interactive menu can:
 
 - register or log in a user,
+- show the current user with role and session id,
+- check whether the auth routes exist on the running gateway,
+- log out,
 - open a product detail by product id,
 - show recent views,
 - add a product to the cart,
@@ -150,7 +130,13 @@ The interactive menu can:
 - remove one item from the cart,
 - create an order,
 - show the current user's orders,
-- log out.
+- test the admin-only product list.
+
+The CLI stores the authentication cookie in:
+
+```text
+.shop_cli_cookies.txt
+```
 
 ## Curl Examples
 
