@@ -22,7 +22,7 @@ public static class ProductEndpoints
                 .OrderBy(p => p.Id)
                 .ToListAsync();
             return Results.Ok(products);
-        });
+        }).RequireAuthorization("admin");
 
         group.MapGet("/recently-viewed", async (CatalogDbContext db, ClaimsPrincipal user, IDistributedCache cache) =>
         {
@@ -94,7 +94,7 @@ public static class ProductEndpoints
             await db.SaveChangesAsync();
 
             return Results.Created($"/api/products/{product.Id}", product);
-        });
+        }).RequireAuthorization("admin");
     }
 
     private static async Task<List<int>> GetRecentlyViewedProductIdsAsync(IDistributedCache cache, string userId)

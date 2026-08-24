@@ -71,6 +71,7 @@ builder.Services
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("authenticated", policy => policy.RequireAuthenticatedUser());
+    options.AddPolicy("admin", policy => policy.RequireRole(Roles.Admin));
 });
 
 builder.Services
@@ -106,7 +107,7 @@ app.MapPost("/auth/register", async (AuthRequest request, IDistributedCache cach
         return Results.Conflict("User already exists.");
     }
 
-    var user = new StoredUser(Guid.NewGuid().ToString("N"), email, HashPassword(request.Password), DateTime.UtcNow);
+    var user = new StoredUser(Guid.NewGuid().ToString("N"), email, HashPassword(request.Password), GetRoleForEmail(email, app.Configuration), DateTime.UtcNow);
     await cache.SetStringAsync(userKey, JsonSerializer.Serialize(user));
 
     var sessionId = Guid.NewGuid().ToString("N");
@@ -146,6 +147,7 @@ app.MapGet("/auth/me", (ClaimsPrincipal user) =>
     {
         userId = user.FindFirstValue(ClaimTypes.NameIdentifier),
         email = user.FindFirstValue(ClaimTypes.Email),
+        role = user.FindFirstValue(ClaimTypes.Role),
         sessionId = GetSessionId(user)
     });
 }).RequireAuthorization();
@@ -177,6 +179,15 @@ static string NormalizeEmail(string email)
 static string GetUserKey(string email)
 {
     return $"auth:user:{email}";
+}
+
+static string GetRoleForEmail(string email, IConfiguration configuration)
+{
+    var adminEmails = configuration.GetSection("Auth:AdminEmails").Get<string[]>() ?? Array.Empty<string>();
+
+    return adminEmails.Any(adminEmail => string.Equals(adminEmail, email, StringComparison.OrdinalIgnoreCase))
+        ? Roles.Admin
+        : Roles.Customer;
 }
 
 static string HashPassword(string password)
@@ -233,6 +244,7 @@ static string CreateAccessToken(StoredUser user, string sessionId, IConfiguratio
         new Claim(ClaimTypes.Sid, sessionId),
         new Claim(ClaimTypes.NameIdentifier, user.Id),
         new Claim(ClaimTypes.Email, user.Email),
+        new Claim(ClaimTypes.Role, user.Role),
         new Claim(JwtRegisteredClaimNames.Email, user.Email)
     };
 
@@ -287,6 +299,12 @@ static string? GetSessionId(ClaimsPrincipal user)
 
 public record AuthRequest(string Email, string Password);
 public record AuthResponse(string UserId, string Email, string SessionId, DateTime ExpiresAtUtc);
-public record StoredUser(string Id, string Email, string PasswordHash, DateTime CreatedAtUtc);
+public record StoredUser(string Id, string Email, string PasswordHash, string Role, DateTime CreatedAtUtc);
 public record StoredSession(string Id, string UserId, string Email, DateTime CreatedAtUtc, DateTime ExpiresAtUtc);
+
+public static class Roles
+{
+    public const string Admin = "Admin";
+    public const string Customer = "Customer";
+}
 
