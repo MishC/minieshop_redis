@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Laptop",
+    "price": 1200
+  },
+  {
+    "name": "Mouse",
+    "price": 25
+  },
+  {
+    "name": "Keyboard",
+    "price": 60
+  },
+  {
+    "name": "USB-C Dock",
+    "price": 149
+  },
+  {
+    "name": "Monitor 27",
+    "price": 329
+  }
+]

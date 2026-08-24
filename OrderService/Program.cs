@@ -9,12 +9,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddStackExchangeRedisCache(options =>
-{
-    options.Configuration = builder.Configuration.GetConnectionString("Redis");
-    options.InstanceName = "order-service:";
-});
-
 builder.Services.AddHttpClient("CartApi", client =>
 {
     client.BaseAddress = new Uri("http://cartservice:8080"); //http://localhost:5002

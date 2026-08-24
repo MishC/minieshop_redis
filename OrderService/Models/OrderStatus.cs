@@ -9,3 +9,8 @@ public enum OrderStatus
     Cancelled = 4,
     Returned = 5
 }
+
+public class ChangeOrderStatusRequest
+{
+    public OrderStatus NewStatus { get; set; }
+}

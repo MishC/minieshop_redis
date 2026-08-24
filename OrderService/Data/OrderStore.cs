@@ -19,6 +19,7 @@ public class OrderStore
             CreatedAtUtc = DateTime.UtcNow,
             TotalAmount = totalAmount,
             Items = items
+            
         };
 
         Orders.Add(order);

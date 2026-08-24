@@ -25,7 +25,11 @@ services:
     ports:
       - "5001:8080"
     depends_on:
+      - postgres
       - redis
+    environment:
+      ConnectionStrings__DefaultConnection: ${CONNECTION_STRING}
+      ConnectionStrings__Redis: redis:6379
 
   cartservice:
     build:
@@ -45,7 +49,6 @@ services:
     ports:
       - "5003:8080"
     depends_on:
-      - redis
       - postgres
     environment:
       ConnectionStrings__DefaultConnection: ${CONNECTION_STRING}
